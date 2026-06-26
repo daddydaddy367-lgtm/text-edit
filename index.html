@@ -171,7 +171,6 @@
     const sourcePreview = document.getElementById('source-preview');
     const uploadPrompt = document.getElementById('upload-prompt');
 
-    // 🔑 FIXED: Enclosed properly in string quotation marks
     const part1 = "AIzaSy"; 
     const part2 = "AQ.Ab8RN6KjfuF6-bo_VAhdMIM8gsvuzZ-HDqFcOPNVLIXiqP2PkQ"; 
     const apiKey = part1 + part2;
@@ -209,14 +208,15 @@
         const ctx = canvas.getContext('2d');
 
         btn.disabled = true;
-        btn.innerText = "⏳ AI is Redrawing Backgrounds...";
-        statusText.innerText = "Processing canvas metrics and analyzing layout artwork with Gemini...";
+        btn.innerText = "⏳ AI is scanning text regions...";
+        statusText.innerText = "Analyzing dialog bubble layouts with Gemini...";
         canvas.style.display = 'none';
         statusText.style.display = 'block';
 
         try {
             const ai = new GoogleGenAI({ apiKey: apiKey });
             
+            // Ask the model to return coordinates instead of binary file data streams
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: [
@@ -226,20 +226,50 @@
                             data: loadedImageBase64
                         }
                     },
-                    "Analyze this comic panel carefully. Identify all text inside speech bubbles or text boxes. Remove the text strings completely and redraw/repaint the background colors and art structures seamlessly so that it looks clean, blank, and completely ready for custom typesetting translation. Return ONLY the final clean compiled image asset back in standard binary data."
+                    "Locate all dialogue text inside standard speech bubbles. Return your answer as a raw JSON array of bounding boxes normalized out of 1000, like this: [[ymin, xmin, ymax, xmax]]. Ignore background action graphics or SFX drawings."
                 ],
             });
 
+            // Set up clean display layer canvas context
             canvas.width = loadedImageRaw.width;
             canvas.height = loadedImageRaw.height;
             ctx.drawImage(loadedImageRaw, 0, 0);
 
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imgData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                if (data[i] > 240 && data[i+1] > 240 && data[i+2] > 240) {
-                    continue; 
+            const responseText = response.text;
+            
+            // Look for arrays inside the text block output
+            const arrayMatch = responseText.match(/\[\s*\[[\s\S]*?\]\s*\]/);
+            
+            if (arrayMatch) {
+                const boxes = JSON.parse(arrayMatch[0]);
+                
+                // Paint clean white covers precisely onto the discovered coordinate clusters
+                ctx.fillStyle = "#FFFFFF";
+                boxes.forEach(box => {
+                    const ymin = (box[0] / 1000) * canvas.height;
+                    const xmin = (box[1] / 1000) * canvas.width;
+                    const ymax = (box[2] / 1000) * canvas.height;
+                    const xmax = (box[3] / 1000) * canvas.width;
+                    
+                    const w = xmax - xmin;
+                    const h = ymax - ymin;
+                    
+                    // Clear the detected text region cleanly
+                    ctx.fillRect(xmin, ymin, w, h);
+                });
+            } else {
+                // Fallback smart local pixel touch up if the AI just returns conversational text
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imgData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i] > 230 && data[i+1] > 230 && data[i+2] > 230) {
+                        // Erase nearby text shadows safely inside broad light panels
+                        if(i + 4 < data.length && data[i+4] < 120) {
+                            data[i+4] = 255; data[i+5] = 255; data[i+6] = 255;
+                        }
+                    }
                 }
+                ctx.putImageData(imgData, 0, 0);
             }
             
             statusText.style.display = 'none';
@@ -247,7 +277,7 @@
 
         } catch (error) {
             console.error(error);
-            alert("API Processing Encountered an Error: " + error.message);
+            alert("API Process Error: " + error.message);
             statusText.innerText = "Execution failed.";
         } finally {
             btn.disabled = false;
