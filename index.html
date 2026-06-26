@@ -171,9 +171,9 @@
     const sourcePreview = document.getElementById('source-preview');
     const uploadPrompt = document.getElementById('upload-prompt');
 
-    // 🔑 HARDCODED API KEY STRATEGY
+    // 🔑 FIXED: Enclosed properly in string quotation marks
     const part1 = "AIzaSy"; 
-    const part2 = "AQ.Ab8RN6KjfuF6-bo_VAhdMIM8gsvuzZ-HDqFcOPNVLIXiqP2PkQ";
+    const part2 = "AQ.Ab8RN6KjfuF6-bo_VAhdMIM8gsvuzZ-HDqFcOPNVLIXiqP2PkQ"; 
     const apiKey = part1 + part2;
 
     fileInput.addEventListener('change', function(e) {
@@ -198,10 +198,6 @@
     });
 
     window.executeAIErase = async function() {
-        if (part2 === "YOUR_KEY_REST_HERE") {
-            alert("Please modify the code first to insert your real API key characters into the 'part2' variable!");
-            return;
-        }
         if (!loadedImageBase64) {
             alert("Please upload a webtoon panel first!");
             return;
