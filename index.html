@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sunday Compiler — Auto Text Eraser</title>
+    <title>Sunday Compiler — Smart Text Eraser</title>
     <style>
         :root {
             --bg-color: #0b0f19;
@@ -37,25 +37,28 @@
 
         .subtitle {
             color: #94a3b8;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
 
-        .workspace-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
+        .instructions {
+            background-color: #1e293b;
+            border-left: 4px solid var(--accent-color);
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            color: #cbd5e1;
         }
 
-        @media (max-width: 768px) {
-            .workspace-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .panel {
+        .workspace {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            align-items: center;
+            gap: 20px;
         }
 
         .dropzone {
@@ -65,57 +68,61 @@
             text-align: center;
             background-color: rgba(21, 27, 44, 0.5);
             cursor: pointer;
-            position: relative;
-            min-height: 300px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            width: 100%;
+            max-width: 600px;
+            box-sizing: border-box;
         }
 
         .dropzone input[type="file"] {
             position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
             opacity: 0;
             cursor: pointer;
         }
 
-        .preview-img {
+        .canvas-container {
             max-width: 100%;
+            overflow: auto;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
-            display: none;
+            background: #000;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+            margin: 0 auto;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            width: 100%;
+            max-width: 600px;
         }
 
         .btn {
             background-color: var(--accent-color);
             color: white;
             border: none;
-            padding: 14px 20px;
-            font-size: 16px;
+            padding: 12px 20px;
+            font-size: 15px;
             font-weight: 600;
             border-radius: 6px;
             cursor: pointer;
             transition: background 0.2s;
-            width: 100%;
+            flex: 1;
+            text-align: center;
         }
 
         .btn:hover {
             background-color: var(--accent-hover);
         }
-
-        .canvas-container {
-            max-width: 100%;
-            overflow: auto;
-            display: flex;
-            justify-content: center;
+        
+        .btn-secondary {
+            background-color: #475569;
         }
-
-        canvas {
-            max-width: 100%;
-            border-radius: 4px;
+        .btn-secondary:hover {
+            background-color: #334155;
         }
     </style>
 </head>
@@ -123,123 +130,125 @@
 
 <div class="container">
     <h1>🚀 Sunday Compiler</h1>
-    <p class="subtitle">Automated Text Editing Web Suite — Instant Browser Execution</p>
+    <p class="subtitle">Smart Webtoon Cleaner Workspace</p>
 
-    <div class="workspace-grid">
-        <!-- LEFT: INPUT PANEL -->
-        <div class="panel">
-            <div class="dropzone">
-                <p id="upload-prompt">Drag & Drop English Webtoon Panel or Click to Browse</p>
-                <input type="file" id="file-input" accept="image/*">
-                <img id="source-preview" class="preview-img" alt="Source Preview">
-            </div>
-            <button class="btn" onclick="executeAutoErase()">🧼 Compile & Erase Text</button>
+    <div class="instructions">
+        💡 **How to use:** Upload your webtoon panel image. Instead of auto-erasing everything blindly, simply **click or drag your mouse directly over the English text** on the canvas below to wipe it out perfectly!
+    </div>
+
+    <div class="workspace">
+        <!-- UPLOAD REGION -->
+        <div class="dropzone" id="dropzone">
+            <p id="upload-prompt">Drag & Drop Webtoon Panel or Click to Browse</p>
+            <input type="file" id="file-input" accept="image/*">
         </div>
 
-        <!-- RIGHT: OUTPUT PANEL -->
-        <div class="panel">
-            <h3>Cleaned Production Output</h3>
-            <div class="dropzone" style="cursor: default; border-style: solid;">
-                <p id="output-placeholder" style="color: #64748b;">Awaiting processing canvas execution...</p>
-                <div class="canvas-container">
-                    <canvas id="production-canvas" style="display:none;"></canvas>
-                </div>
-            </div>
+        <!-- INTERACTIVE CANVAS WORKSPACE -->
+        <div class="canvas-container" id="canvas-holder" style="display: none;">
+            <canvas id="editor-canvas"></canvas>
+        </div>
+
+        <!-- ACTION CONTROLS -->
+        <div class="controls" id="control-bar" style="display: none;">
+            <button class="btn btn-secondary" onclick="resetImage()">🔄 Reset</button>
+            <a id="download-link" class="btn" download="cleaned_webtoon.png">💾 Save Clean Image</a>
         </div>
     </div>
 </div>
 
 <script>
-    let loadedImage = null;
-
+    let originalImage = null;
+    const canvas = document.getElementById('editor-canvas');
+    const ctx = canvas.getContext('2d');
+    
     const fileInput = document.getElementById('file-input');
-    const sourcePreview = document.getElementById('source-preview');
-    const uploadPrompt = document.getElementById('upload-prompt');
+    const dropzone = document.getElementById('dropzone');
+    const canvasHolder = document.getElementById('canvas-holder');
+    const controlBar = document.getElementById('control-bar');
+    const downloadLink = document.getElementById('download-link');
 
+    let isDrawing = false;
+
+    // Handle Uploading
     fileInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
             reader.onload = function(event) {
-                sourcePreview.src = event.target.result;
-                sourcePreview.style.display = 'block';
-                uploadPrompt.style.display = 'none';
-                
                 const img = new Image();
                 img.src = event.target.result;
                 img.onload = function() {
-                    loadedImage = img;
+                    originalImage = img;
+                    resetImage();
+                    dropzone.style.display = 'none';
+                    canvasHolder.style.display = 'block';
+                    controlBar.style.display = 'flex';
                 }
             }
             reader.readAsDataURL(file);
         }
     });
 
-    function executeAutoErase() {
-        if (!loadedImage) {
-            alert("Please upload a webtoon image first!");
-            return;
-        }
+    function resetImage() {
+        if (!originalImage) return;
+        canvas.width = originalImage.width;
+        canvas.height = originalImage.height;
+        ctx.drawImage(originalImage, 0, 0);
+        updateDownloadLink();
+    }
 
-        const canvas = document.getElementById('production-canvas');
-        const ctx = canvas.getContext('2d');
-        const placeholder = document.getElementById('output-placeholder');
+    // Smart Text Wiper Brush Logic
+    function eraseAtLink(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        
+        // Calculate exact pixel scale inside the canvas aspect layout matrix
+        const x = Math.floor((clientX - rect.left) * (canvas.width / rect.width));
+        const y = Math.floor((clientY - rect.top) * (canvas.height / rect.height));
 
-        canvas.width = loadedImage.width;
-        canvas.height = loadedImage.height;
-        ctx.drawImage(loadedImage, 0, 0);
+        // Sample the local background color right next to the text (usually white or bubble color)
+        // We pick a spot 5 pixels up to avoid sampling the black text itself
+        const sampleY = Math.max(0, y - 5);
+        const pixelData = ctx.getImageData(x, sampleY, 1, 1).data;
+        const r = pixelData[0];
+        const g = pixelData[1];
+        const b = pixelData[2];
 
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imgData.data;
-        const width = canvas.width;
-        const height = canvas.height;
+        // Fill a clean circle over the targeted English text with the sampled bubble background color
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 15, 0, 2 * Math.PI); // Radius 15 handles text size beautifully
+        ctx.fill();
+        
+        updateDownloadLink();
+    }
 
-        // Step 1: Detect White Speech Bubbles
-        // We create an array to remember where the white bubbles are located
-        const isBubble = new Uint8Array(width * height);
+    // Interactive Mouse Event Triggers
+    canvas.addEventListener('mousedown', (e) => {
+        isDrawing = true;
+        eraseAtLink(e.clientX, e.clientY);
+    });
 
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const idx = (y * width + x) * 4;
-                const r = data[idx];
-                const g = data[idx+1];
-                const b = data[idx+2];
+    canvas.addEventListener('mousemove', (e) => {
+        if (isDrawing) eraseAtLink(e.clientX, e.clientY);
+    });
 
-                // If the pixel is pure white or very close to it (Speech bubble background)
-                if (r > 220 && g > 220 && b > 220) {
-                    isBubble[y * width + x] = 1;
-                }
-            }
-        }
+    window.addEventListener('mouseup', () => { isDrawing = false; });
 
-        // Step 2: Clean the English text ONLY if it is inside a detected bubble zone
-        for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-                const pos = y * width + x;
-                const idx = pos * 4;
-                
-                const r = data[idx];
-                const g = data[idx+1];
-                const b = data[idx+2];
+    // Touch support for Mobile / Tablets
+    canvas.addEventListener('touchstart', (e) => {
+        isDrawing = true;
+        const touch = e.touches[0];
+        eraseAtLink(touch.clientX, touch.clientY);
+    });
+    canvas.addEventListener('touchmove', (e) => {
+        if (!isDrawing) return;
+        const touch = e.touches[0];
+        eraseAtLink(touch.clientX, touch.clientY);
+    });
+    window.addEventListener('touchend', () => { isDrawing = false; });
 
-                // Check if this pixel is dark (text font stroke)
-                if (r < 100 && g < 100 && b < 100) {
-                    // Check if its neighbors are part of a white speech bubble
-                    if (isBubble[pos] || isBubble[pos-1] || isBubble[pos+1] || isBubble[pos-width] || isBubble[pos+width]) {
-                        // Make the text disappear by turning it pure white to match the bubble
-                        data[idx] = 255;   
-                        data[idx+1] = 255;
-                        data[idx+2] = 255;
-                        // Keep updating the bubble map so connected text continues erasing
-                        isBubble[pos] = 1; 
-                    }
-                }
-            }
-        }
-
-        ctx.putImageData(imgData, 0, 0);
-        placeholder.style.display = 'none';
-        canvas.style.display = 'block';
+    function updateDownloadLink() {
+        downloadLink.href = canvas.toDataURL('image/png');
     }
 </script>
 
